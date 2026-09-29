@@ -1,0 +1,35 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "jj-xiangqi-assistant"
+version = "0.1.0"
+description = "Windows 微信 JJ 象棋协议探针与 AI 助手核心"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "JJ Xiangqi Assistant contributors" }]
+dependencies = []
+
+[project.optional-dependencies]
+probe = ["mitmproxy>=11,<13"]
+dev = ["pytest>=8,<10", "ruff>=0.11,<1"]
+
+[project.scripts]
+jj-assistant = "jj_assistant.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/jj_assistant"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q --basetemp=.pytest-tmp"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+

@@ -1,0 +1,50 @@
+"""mitmproxy 插件：``mitmdump -s src/jj_assistant/mitm_addon.py``。"""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+try:
+    from mitmproxy import ctx, http
+except ImportError:  # 允许在未安装 probe 依赖时导入核心包
+    ctx = None  # type: ignore[assignment]
+    http = None  # type: ignore[assignment]
+
+from jj_assistant.events import EventWriter
+
+
+class JJWebSocketProbe:
+    def __init__(self) -> None:
+        self.writer: EventWriter | None = None
+
+    def load(self, loader) -> None:  # pragma: no cover - 由 mitmproxy 调用
+        loader.add_option("jj_output", str, "data/jj-events.jsonl", "JJ 事件 JSONL 输出路径")
+        loader.add_option("jj_capture_unknown", bool, False, "保存未知 JSON 负载")
+
+    def running(self) -> None:  # pragma: no cover - 由 mitmproxy 调用
+        output = Path(ctx.options.jj_output).resolve()
+        self.writer = EventWriter(output, capture_unknown=ctx.options.jj_capture_unknown)
+        ctx.log.info(f"JJ 协议探针已启动，事件输出：{output}")
+
+    def websocket_message(self, flow) -> None:  # pragma: no cover - 由 mitmproxy 调用
+        if self.writer is None or flow.websocket is None or not flow.websocket.messages:
+            return
+        message = flow.websocket.messages[-1]
+        if message.is_text:
+            return
+        host = flow.request.pretty_host if flow.request else None
+        events = self.writer.record_frame(
+            bytes(message.content), from_client=message.from_client, host=host
+        )
+        for event in events:
+            if event["kind"] == "move":
+                move = event["move"]
+                ctx.log.alert(
+                    "JJ MOVE "
+                    f"({move['from_x']},{move['from_y']}) -> ({move['to_x']},{move['to_y']}) "
+                    f"seat={move['seat']} match={move['match_id']}"
+                )
+
+
+addons = [JJWebSocketProbe()]
+
