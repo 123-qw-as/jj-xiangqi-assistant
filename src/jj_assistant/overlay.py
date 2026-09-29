@@ -133,12 +133,17 @@ class SuggestionOverlay:
             self.value_label.configure(text=uci)
             self.detail_label.configure(text=f"服务器返回：{uci}")
             return
-        if self.my_side is None:
-            self.value_label.configure(text="等待识别我方…")
-            self.detail_label.configure(text=f"暂不显示服务器建议 · 原始坐标：{uci}")
-            return
-
         side_before = self._side_to_move()
+        if self.my_side is None:
+            if side_before not in {"red", "black"}:
+                self.value_label.configure(text="等待识别我方…")
+                self.detail_label.configure(text=f"暂不显示服务器建议 · 原始坐标：{uci}")
+                return
+            # 残局接口的返回走法是电脑方走法，因此返回前轮到的另一方就是我方。
+            self.my_side = "black" if side_before == "red" else "red"
+            side_name = "红方" if self.my_side == "red" else "黑方"
+            self.detail_label.configure(text=f"按服务器走子识别我方：{side_name}")
+
         if side_before == self.my_side:
             if self.engine_path:
                 self.value_label.configure(text="正在分析我方…")

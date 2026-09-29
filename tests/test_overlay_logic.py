@@ -32,3 +32,21 @@ def test_server_opponent_move_is_applied_before_local_analysis():
     assert overlay.challenge_board.red_to_move is True
     assert scheduled == [overlay.challenge_board.to_fen()]
     assert overlay.value_label.values["text"] == "正在分析我方…"
+
+
+def test_auto_side_is_inferred_from_server_suggestion():
+    overlay = object.__new__(SuggestionOverlay)
+    overlay.challenge_board = XiangqiBoard.initial()
+    overlay.challenge_board.red_to_move = False
+    overlay.my_side = None
+    overlay.auto_side = True
+    overlay.engine_path = "fake-pikafish.exe"
+    overlay.value_label = Label()
+    overlay.detail_label = Label()
+    scheduled = []
+    overlay._schedule_engine = lambda fen: scheduled.append(fen)
+
+    overlay._handle_server_suggestion({}, {"uci": "g6g5"})
+
+    assert overlay.my_side == "red"
+    assert scheduled == [overlay.challenge_board.to_fen()]
