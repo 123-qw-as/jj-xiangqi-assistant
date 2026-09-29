@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from .protocol import (
+    extract_game_start,
     extract_moves,
     extract_player_side,
     extract_side_signals,
@@ -60,6 +61,13 @@ class EventWriter:
             "trailing_bytes": frame.trailing_bytes,
             "payload_keys": payload_keys(frame.payload),
         }
+        game_start = extract_game_start(frame)
+        if game_start is not None:
+            state_key = str(game_start)
+            self._games[state_key] = GameState()
+            self._red_seats.pop(state_key, None)
+            self._local_seats.pop(state_key, None)
+            base["game_start"] = state_key
         player_side = extract_player_side(frame)
         for match_id, signal, seat in extract_side_signals(frame):
             state_key = str(match_id) if match_id is not None else f"unknown@{host}"
@@ -80,9 +88,17 @@ class EventWriter:
             for move in moves:
                 state_key = str(move.match_id) if move.match_id is not None else f"unknown@{host}"
                 game = self._games.setdefault(state_key, GameState())
+                move_base = dict(base)
+                if "player_side" not in move_base:
+                    red_seat = self._red_seats.get(state_key)
+                    local_seat = self._local_seats.get(state_key)
+                    if red_seat is not None and local_seat is not None:
+                        move_base["player_side"] = (
+                            "red" if red_seat == local_seat else "black"
+                        )
                 events.append(
                     {
-                        **base,
+                        **move_base,
                         "kind": "move",
                         "move": move.as_dict(),
                         "game_state": game.apply(move),

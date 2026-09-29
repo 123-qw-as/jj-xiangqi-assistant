@@ -124,6 +124,17 @@ def extract_side_signals(frame: ParsedFrame) -> list[tuple[str | int | None, str
     return signals
 
 
+def extract_game_start(frame: ParsedFrame) -> str | int | None:
+    """返回新棋局的 matchid；同一桌的多局可能复用该 ID。"""
+
+    if frame.message_type != MSG_CHESS_MOVE:
+        return None
+    for mapping, match_id in _walk_mappings_with_match(frame.payload):
+        if "chesslayoutbegin_ack_msg" in mapping:
+            return match_id
+    return None
+
+
 def parse_uci_move(value: Any) -> JJMove | None:
     """把 Pikafish 的 ``a0a1`` 坐标转换为 JJ 坐标。"""
 

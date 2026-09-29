@@ -1,3 +1,6 @@
+import json
+import queue
+
 from jj_assistant.board import XiangqiBoard
 from jj_assistant.overlay import SuggestionOverlay
 
@@ -62,3 +65,35 @@ def test_auto_side_is_inferred_from_server_suggestion():
 
     assert overlay.my_side == "red"
     assert scheduled == [overlay.challenge_board.to_fen()]
+
+
+def test_overlay_skips_desynced_position():
+    overlay = object.__new__(SuggestionOverlay)
+    overlay.my_side = "red"
+    overlay.auto_side = True
+    overlay.engine_path = "fake-pikafish.exe"
+    overlay.value_label = Label()
+    overlay.detail_label = Label()
+    overlay.requested_fen = "old"
+    scheduled = []
+    overlay._schedule_engine = lambda fen: scheduled.append(fen)
+    overlay._handle_line(json.dumps({
+        "kind": "move",
+        "game_state": {"status": "desynced", "fen": XiangqiBoard.initial().to_fen()},
+    }))
+    assert scheduled == []
+    assert overlay.requested_fen is None
+
+
+def test_overlay_discards_result_after_turn_changed():
+    overlay = object.__new__(SuggestionOverlay)
+    overlay.my_side = "red"
+    overlay.value_label = Label()
+    overlay.detail_label = Label()
+    fen = XiangqiBoard.initial().to_fen()
+    overlay.requested_fen = None
+    overlay.engine_busy = True
+    overlay.engine_results = queue.Queue()
+    overlay.engine_results.put((fen, "a3a4", None))
+    overlay._drain_engine_results()
+    assert "text" not in overlay.value_label.values

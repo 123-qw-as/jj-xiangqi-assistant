@@ -133,9 +133,16 @@ class PikafishEngine:
             if remaining <= 0:
                 raise EngineError(f"等待 Pikafish 返回 {prefix} 超时")
             try:
-                line = self._lines.get(timeout=remaining)
+                line = self._lines.get(timeout=min(remaining, 0.1))
             except queue.Empty as exc:
-                raise EngineError(f"等待 Pikafish 返回 {prefix} 超时") from exc
+                process = self._process
+                if process is not None and process.poll() is not None:
+                    raise EngineError(
+                        f"Pikafish 进程提前退出（代码 {process.returncode}）"
+                    ) from exc
+                continue
+            if "CRITICAL ERROR" in line:
+                raise EngineError(f"Pikafish 拒绝局面：{line}")
             if line.startswith(prefix):
                 return line
 

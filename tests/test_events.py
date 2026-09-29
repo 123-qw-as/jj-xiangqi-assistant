@@ -61,6 +61,54 @@ def test_writer_infers_side_from_new_protocol_seat_signals(tmp_path):
     )
 
     assert events[0]["player_side"] == "black"
+    move_body = json.dumps({
+        "chess_ack_msg": {
+            "matchid": 7,
+            "chessmove_ack_msg": {
+                "beginposx": 0, "beginposy": 3,
+                "endposx": 0, "endposy": 4,
+            },
+        }
+    }).encode()
+    move = writer.record_frame(
+        struct.pack("<II", MSG_CHESS_MOVE, len(move_body)) + move_body,
+        from_client=False,
+    )[0]
+    assert move["player_side"] == "black"
+
+
+def test_new_game_resets_board_and_old_seat(tmp_path):
+    writer = EventWriter(tmp_path / "events.jsonl")
+
+    def send(payload, *, client=False, message_type=MSG_CHESS_MOVE):
+        body = json.dumps(payload).encode()
+        return writer.record_frame(
+            struct.pack("<II", message_type, len(body)) + body,
+            from_client=client,
+        )[0]
+
+    send({"chess_req_msg": {"matchid": 7, "chessappinfo_req_msg": {"seat": 1}}},
+         client=True, message_type=MSG_LOBBY)
+    send({"chess_ack_msg": {"matchid": 7, "chesssetcolor_ack_msg": {"redseat": 0}}})
+    send({"chess_ack_msg": {"matchid": 7, "chessmove_ack_msg": {
+        "beginposx": 0, "beginposy": 3, "endposx": 0, "endposy": 4,
+    }}})
+
+    send({"chess_ack_msg": {"matchid": 7, "chesslayoutbegin_ack_msg": {}}})
+    color = send({"chess_ack_msg": {
+        "matchid": 7, "chesssetcolor_ack_msg": {"redseat": 1},
+    }})
+    side = send({"chess_req_msg": {
+        "matchid": 7, "chessappinfo_req_msg": {"seat": 1},
+    }}, client=True, message_type=MSG_LOBBY)
+    first_move = send({"chess_ack_msg": {"matchid": 7, "chessmove_ack_msg": {
+        "beginposx": 0, "beginposy": 3, "endposx": 0, "endposy": 4,
+    }}})
+
+    assert "player_side" not in color
+    assert side["player_side"] == "red"
+    assert first_move["game_state"]["status"] == "applied"
+    assert first_move["game_state"]["applied_moves"] == 1
 
 
 def test_writer_does_not_store_unknown_payload_by_default(tmp_path):
@@ -90,6 +138,29 @@ def test_writer_deduplicates_repeated_move(tmp_path):
     events = writer.record_frame(frame(payload), from_client=False)
     assert events[0]["game_state"]["status"] == "duplicate"
     assert events[0]["game_state"]["applied_moves"] == 1
+
+
+def test_writer_does_not_resume_analysis_after_a_lost_move(tmp_path):
+    writer = EventWriter(tmp_path / "events.jsonl")
+
+    def send(move):
+        payload = {"matchid": "m1", "chessmove_ack_msg": move}
+        return writer.record_frame(frame(payload), from_client=False)[0]
+    first = send({"beginposx": 0, "beginposy": 3, "endposx": 0, "endposy": 4})
+    missed = send({"beginposx": 0, "beginposy": 3, "endposx": 0, "endposy": 5})
+    later = send({"beginposx": 2, "beginposy": 3, "endposx": 2, "endposy": 4})
+
+    assert first["game_state"]["status"] == "applied"
+    assert missed["game_state"]["status"] == "desynced"
+    assert later["game_state"]["status"] == "desynced"
+
+
+def test_writer_rejects_move_from_wrong_color(tmp_path):
+    writer = EventWriter(tmp_path / "events.jsonl")
+    event = writer.record_frame(frame({"chessmove_ack_msg": {
+        "beginposx": 0, "beginposy": 6, "endposx": 0, "endposy": 5,
+    }}), from_client=False)[0]
+    assert event["game_state"]["status"] == "desynced"
 
 
 def test_writer_records_challenge_http_json_without_query_or_headers(tmp_path):

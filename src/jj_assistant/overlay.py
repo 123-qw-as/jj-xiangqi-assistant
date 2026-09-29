@@ -113,6 +113,13 @@ class SuggestionOverlay:
             event = json.loads(line)
         except json.JSONDecodeError:
             return
+        if event.get("game_start") is not None:
+            self.requested_fen = None
+            self.challenge_board = None
+            if self.auto_side:
+                self.my_side = None
+            self.value_label.configure(text="等待棋局消息…")
+            self.detail_label.configure(text="新局开始，正在同步棋盘")
         detected_side = event.get("player_side")
         if self.auto_side and detected_side in {"red", "black"}:
             self.my_side = detected_side
@@ -128,10 +135,18 @@ class SuggestionOverlay:
         elif event.get("kind") == "move":
             state = event.get("game_state") or {}
             fen = state.get("fen")
-            if self.my_side is None:
+            status = state.get("status")
+            if status == "desynced":
+                self.requested_fen = None
+                self.value_label.configure(text="棋盘待同步…")
+                self.detail_label.configure(text="检测到漏帧或局面错误，等待下一局")
+            elif status == "duplicate":
+                return
+            elif self.my_side is None:
                 self.value_label.configure(text="等待识别我方…")
                 self.detail_label.configure(text="尚未从 JJ 人机信息识别我方阵营")
             elif isinstance(fen, str) and self._fen_side(fen) != self.my_side:
+                self.requested_fen = None
                 self.value_label.configure(text="等待对方走子…")
                 self.detail_label.configure(
                     text=f"当前不是我方回合，跳过这一步 · 状态：{state.get('status', 'unknown')}"
@@ -237,14 +252,28 @@ class SuggestionOverlay:
             self.engine_busy = False
             if fen == self.requested_fen:
                 if error:
-                    self.value_label.configure(text="引擎暂不可用")
-                    self.detail_label.configure(text=error)
+                    if "Unsupported position" in error:
+                        self.requested_fen = None
+                        self.value_label.configure(text="棋盘待同步…")
+                        self.detail_label.configure(text="当前局面被引擎拒绝，等待下一局")
+                    else:
+                        self.value_label.configure(text="引擎暂不可用")
+                        self.detail_label.configure(text=error)
                 elif uci:
                     board = XiangqiBoard.from_fen(fen)
                     move = parse_uci_move(uci)
-                    chinese = format_chinese_move(board, move) if move else uci
-                    self.value_label.configure(text=chinese)
-                    self.detail_label.configure(text=f"本地引擎 · 原始坐标：{uci}")
+                    piece = board.piece_at(move.from_x, move.from_y) if move else None
+                    if (
+                        move is None
+                        or self._fen_side(fen) != self.my_side
+                        or piece is None
+                        or piece.isupper() != (self.my_side == "red")
+                    ):
+                        self.value_label.configure(text="棋盘待同步…")
+                        self.detail_label.configure(text="引擎走法与我方阵营不符")
+                    else:
+                        self.value_label.configure(text=format_chinese_move(board, move))
+                        self.detail_label.configure(text=f"本地引擎 · 原始坐标：{uci}")
             if self.requested_fen and self.requested_fen != fen:
                 self._schedule_engine(self.requested_fen)
 
