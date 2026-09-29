@@ -9,6 +9,7 @@ from jj_assistant.protocol import (
     ProtocolError,
     extract_moves,
     extract_player_side,
+    extract_side_signals,
     parse_frame,
     parse_position_order,
     parse_uci_move,
@@ -79,6 +80,28 @@ def test_extracts_human_side_from_json_encoded_bot_info():
     frame = parse_frame(make_frame(payload, message_type=MSG_LOBBY))
 
     assert extract_player_side(frame) == "red"
+
+
+def test_extracts_new_protocol_side_signals():
+    color = {
+        "chess_ack_msg": {
+            "matchid": 7,
+            "chesssetcolor_ack_msg": {"redseat": 0},
+        }
+    }
+    app = {
+        "chess_req_msg": {
+            "matchid": 7,
+            "chessappinfo_req_msg": {"seat": 1},
+        }
+    }
+
+    assert extract_side_signals(parse_frame(make_frame(color, MSG_CHESS_MOVE))) == [
+        (7, "red_seat", 0)
+    ]
+    assert extract_side_signals(parse_frame(make_frame(app, MSG_LOBBY))) == [
+        (7, "local_seat", 1)
+    ]
 
 
 def test_rejects_short_or_truncated_frames():

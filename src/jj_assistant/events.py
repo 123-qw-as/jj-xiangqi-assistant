@@ -10,6 +10,7 @@ from typing import Any
 from .protocol import (
     extract_moves,
     extract_player_side,
+    extract_side_signals,
     parse_frame,
     parse_position_order,
     parse_uci_move,
@@ -24,6 +25,8 @@ class EventWriter:
         self.capture_unknown = capture_unknown
         self._lock = threading.Lock()
         self._games: dict[str, GameState] = {}
+        self._red_seats: dict[str, int] = {}
+        self._local_seats: dict[str, int] = {}
 
     def record_frame(
         self,
@@ -58,6 +61,17 @@ class EventWriter:
             "payload_keys": payload_keys(frame.payload),
         }
         player_side = extract_player_side(frame)
+        for match_id, signal, seat in extract_side_signals(frame):
+            state_key = str(match_id) if match_id is not None else f"unknown@{host}"
+            if signal == "red_seat":
+                self._red_seats[state_key] = seat
+            else:
+                self._local_seats[state_key] = seat
+            if player_side is None:
+                red_seat = self._red_seats.get(state_key)
+                local_seat = self._local_seats.get(state_key)
+                if red_seat is not None and local_seat is not None:
+                    player_side = "red" if local_seat == red_seat else "black"
         if player_side is not None:
             base["player_side"] = player_side
         moves = extract_moves(frame)

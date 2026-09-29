@@ -2,7 +2,7 @@ import json
 import struct
 
 from jj_assistant.events import EventWriter
-from jj_assistant.protocol import MSG_CHESS_MOVE
+from jj_assistant.protocol import MSG_CHESS_MOVE, MSG_LOBBY
 
 
 def frame(payload):
@@ -32,6 +32,35 @@ def test_writer_records_minimal_move_event(tmp_path):
     assert saved["game_state"]["status"] == "applied"
     assert saved["game_state"]["fen"].endswith(" b - - 0 1")
     assert "payload" not in saved
+
+
+def test_writer_infers_side_from_new_protocol_seat_signals(tmp_path):
+    output = tmp_path / "events.jsonl"
+    writer = EventWriter(output)
+    body = json.dumps(
+        {
+            "chess_req_msg": {
+                "matchid": 7,
+                "chessappinfo_req_msg": {"seat": 1},
+            }
+        }
+    ).encode()
+    writer.record_frame(struct.pack("<II", MSG_LOBBY, len(body)) + body, from_client=True)
+
+    body = json.dumps(
+        {
+            "chess_ack_msg": {
+                "matchid": 7,
+                "chesssetcolor_ack_msg": {"redseat": 0},
+            }
+        }
+    ).encode()
+    events = writer.record_frame(
+        struct.pack("<II", MSG_CHESS_MOVE, len(body)) + body,
+        from_client=False,
+    )
+
+    assert events[0]["player_side"] == "black"
 
 
 def test_writer_does_not_store_unknown_payload_by_default(tmp_path):

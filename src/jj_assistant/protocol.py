@@ -99,6 +99,31 @@ def extract_player_side(frame: ParsedFrame) -> str | None:
     return None
 
 
+def extract_side_signals(frame: ParsedFrame) -> list[tuple[str | int | None, str, int]]:
+    """提取 JJ 新版协议中的本机座位和红方座位信号。
+
+    人机局有时不再发送 ``isRed``，但会先发送
+    ``chesssetcolor_ack_msg.redseat``，随后由客户端发送
+    ``chessappinfo_req_msg.seat``。两者结合即可得到本机执棋方。
+    """
+
+    if frame.message_type not in {MSG_LOBBY, MSG_CHESS_MOVE}:
+        return []
+    signals: list[tuple[str | int | None, str, int]] = []
+    for mapping, match_id in _walk_mappings_with_match(frame.payload):
+        app_info = mapping.get("chessappinfo_req_msg")
+        if isinstance(app_info, Mapping):
+            seat = _optional_int(app_info.get("seat"))
+            if seat is not None:
+                signals.append((match_id, "local_seat", seat))
+        color_info = mapping.get("chesssetcolor_ack_msg")
+        if isinstance(color_info, Mapping):
+            red_seat = _optional_int(color_info.get("redseat"))
+            if red_seat is not None:
+                signals.append((match_id, "red_seat", red_seat))
+    return signals
+
+
 def parse_uci_move(value: Any) -> JJMove | None:
     """把 Pikafish 的 ``a0a1`` 坐标转换为 JJ 坐标。"""
 
@@ -177,6 +202,31 @@ def _walk_mappings(value: Any) -> Iterator[Mapping[str, Any]]:
             return
         if decoded != value:
             yield from _walk_mappings(decoded)
+
+
+def _walk_mappings_with_match(
+    value: Any, inherited_match_id: str | int | None = None
+) -> Iterator[tuple[Mapping[str, Any], str | int | None]]:
+    if isinstance(value, Mapping):
+        match_id = _direct_match_id(value)
+        if match_id is None:
+            match_id = inherited_match_id
+        yield value, match_id
+        for child in value.values():
+            yield from _walk_mappings_with_match(child, match_id)
+    elif isinstance(value, list):
+        for child in value:
+            yield from _walk_mappings_with_match(child, inherited_match_id)
+    elif isinstance(value, str):
+        text = value.strip()
+        if not text or text[0] not in "[{":
+            return
+        try:
+            decoded = json.loads(text)
+        except json.JSONDecodeError:
+            return
+        if decoded != value:
+            yield from _walk_mappings_with_match(decoded, inherited_match_id)
 
 
 def _direct_match_id(value: Mapping[str, Any]) -> str | int | None:
