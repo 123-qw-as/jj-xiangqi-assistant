@@ -7,7 +7,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from .protocol import extract_moves, parse_frame, parse_position_order, parse_uci_move, payload_keys
+from .protocol import (
+    extract_moves,
+    extract_player_side,
+    parse_frame,
+    parse_position_order,
+    parse_uci_move,
+    payload_keys,
+)
 from .state import GameState
 
 
@@ -50,6 +57,9 @@ class EventWriter:
             "trailing_bytes": frame.trailing_bytes,
             "payload_keys": payload_keys(frame.payload),
         }
+        player_side = extract_player_side(frame)
+        if player_side is not None:
+            base["player_side"] = player_side
         moves = extract_moves(frame)
         events: list[dict[str, Any]] = []
         if moves:

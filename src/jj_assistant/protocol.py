@@ -80,6 +80,25 @@ def payload_keys(payload: Any) -> list[str]:
     return sorted(str(key) for key in payload)
 
 
+def extract_player_side(frame: ParsedFrame) -> str | None:
+    """从人机模式大厅请求的 ``isRed`` 推断本机执棋方。"""
+
+    if frame.message_type != MSG_LOBBY:
+        return None
+    for mapping in _walk_mappings(frame.payload):
+        bot_info = mapping.get("chessbotinfo_req_msg")
+        if not isinstance(bot_info, Mapping):
+            continue
+        value = bot_info.get("isRed", bot_info.get("isred"))
+        if isinstance(value, bool):
+            return "red" if value else "black"
+        if isinstance(value, int) and value in {0, 1}:
+            return "red" if value == 1 else "black"
+        if isinstance(value, str) and value in {"0", "1"}:
+            return "red" if value == "1" else "black"
+    return None
+
+
 def parse_uci_move(value: Any) -> JJMove | None:
     """把 Pikafish 的 ``a0a1`` 坐标转换为 JJ 坐标。"""
 
@@ -137,6 +156,27 @@ def _move_mappings(
     elif isinstance(value, list):
         for child in value:
             yield from _move_mappings(child, inherited_match_id)
+
+
+def _walk_mappings(value: Any) -> Iterator[Mapping[str, Any]]:
+    if isinstance(value, Mapping):
+        yield value
+        for child in value.values():
+            yield from _walk_mappings(child)
+    elif isinstance(value, list):
+        for child in value:
+            yield from _walk_mappings(child)
+    elif isinstance(value, str):
+        # 部分微信版本把内层消息再次编码成 JSON 字符串。
+        text = value.strip()
+        if not text or text[0] not in "[{":
+            return
+        try:
+            decoded = json.loads(text)
+        except json.JSONDecodeError:
+            return
+        if decoded != value:
+            yield from _walk_mappings(decoded)
 
 
 def _direct_match_id(value: Mapping[str, Any]) -> str | int | None:

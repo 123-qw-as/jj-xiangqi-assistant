@@ -24,16 +24,17 @@ class SuggestionOverlay:
         *,
         engine_path: str | Path | None = None,
         movetime_ms: int = 1000,
-        my_side: str = "red",
+        my_side: str = "auto",
     ) -> None:
-        if my_side not in {"red", "black"}:
-            raise ValueError("我方阵营必须是 red 或 black")
+        if my_side not in {"auto", "red", "black"}:
+            raise ValueError("我方阵营必须是 auto、red 或 black")
         self.event_path = Path(event_path)
         self.offset = 0
         self.challenge_board: XiangqiBoard | None = None
         self.engine_path = Path(engine_path) if engine_path else None
         self.movetime_ms = movetime_ms
-        self.my_side = my_side
+        self.my_side: str | None = None if my_side == "auto" else my_side
+        self.auto_side = my_side == "auto"
         self.engine: PikafishEngine | None = None
         self.engine_busy = False
         self.requested_fen: str | None = None
@@ -93,6 +94,11 @@ class SuggestionOverlay:
             event = json.loads(line)
         except json.JSONDecodeError:
             return
+        detected_side = event.get("player_side")
+        if self.auto_side and detected_side in {"red", "black"}:
+            self.my_side = detected_side
+            side_name = "红方" if detected_side == "red" else "黑方"
+            self.detail_label.configure(text=f"已识别我方：{side_name}")
         if event.get("kind") in {"http_request", "http_response"}:
             enrich_http_event(event)
         if event.get("kind") == "http_request":
@@ -103,7 +109,10 @@ class SuggestionOverlay:
         elif event.get("kind") == "move":
             state = event.get("game_state") or {}
             fen = state.get("fen")
-            if isinstance(fen, str) and self._fen_side(fen) != self.my_side:
+            if self.my_side is None:
+                self.value_label.configure(text="等待识别我方…")
+                self.detail_label.configure(text="尚未从 JJ 人机信息识别我方阵营")
+            elif isinstance(fen, str) and self._fen_side(fen) != self.my_side:
                 self.value_label.configure(text="等待对方走子…")
                 self.detail_label.configure(
                     text=f"当前不是我方回合，跳过这一步 · 状态：{state.get('status', 'unknown')}"
@@ -123,6 +132,10 @@ class SuggestionOverlay:
         if move is None or board is None:
             self.value_label.configure(text=uci)
             self.detail_label.configure(text=f"服务器返回：{uci}")
+            return
+        if self.my_side is None:
+            self.value_label.configure(text="等待识别我方…")
+            self.detail_label.configure(text=f"暂不显示服务器建议 · 原始坐标：{uci}")
             return
 
         side_before = self._side_to_move()
@@ -259,7 +272,7 @@ def run_overlay(
     *,
     engine_path: str | Path | None = None,
     movetime_ms: int = 1000,
-    my_side: str = "red",
+    my_side: str = "auto",
 ) -> None:
     SuggestionOverlay(
         event_path,

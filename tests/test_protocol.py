@@ -5,8 +5,10 @@ import pytest
 
 from jj_assistant.protocol import (
     MSG_CHESS_MOVE,
+    MSG_LOBBY,
     ProtocolError,
     extract_moves,
+    extract_player_side,
     parse_frame,
     parse_position_order,
     parse_uci_move,
@@ -54,6 +56,29 @@ def test_extracts_nested_move_and_match_id():
     assert moves[0].round_time == 1.5
     assert moves[0].is_local is False
     assert moves[0].match_id == 42
+
+
+def test_extracts_human_side_from_bot_info():
+    payload = {
+        "lobby_req_msg": {
+            "chessbotinfo_req_msg": {"matchid": 7, "isRed": 0},
+        }
+    }
+
+    frame = parse_frame(make_frame(payload, message_type=MSG_LOBBY))
+
+    assert extract_player_side(frame) == "black"
+
+
+def test_extracts_human_side_from_json_encoded_bot_info():
+    payload = {
+        "lobby_req_msg": {},
+        "param": json.dumps({"chessbotinfo_req_msg": {"isRed": 1}}),
+    }
+
+    frame = parse_frame(make_frame(payload, message_type=MSG_LOBBY))
+
+    assert extract_player_side(frame) == "red"
 
 
 def test_rejects_short_or_truncated_frames():

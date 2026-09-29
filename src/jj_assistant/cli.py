@@ -119,9 +119,9 @@ def main(argv: list[str] | None = None) -> int:
     overlay_parser.add_argument("--movetime-ms", type=int, default=1000, help="引擎单次分析毫秒数")
     overlay_parser.add_argument(
         "--my-side",
-        choices=("red", "black"),
-        default="red",
-        help="我方阵营，默认 red（红方）",
+        choices=("auto", "red", "black"),
+        default="auto",
+        help="我方阵营，默认 auto（从 JJ 人机信息识别）",
     )
     engine_parser = subparsers.add_parser("engine-check", help="检查 Pikafish UCI 接口")
     engine_parser.add_argument("path", type=Path)

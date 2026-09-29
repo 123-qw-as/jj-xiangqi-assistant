@@ -73,11 +73,12 @@ py -3.12 -m venv .venv
 ```powershell
 .\.venv\Scripts\python.exe -m jj_assistant engine-check C:\Tools\Pikafish.exe
 .\.venv\Scripts\python.exe -m jj_assistant overlay data\jj-events.jsonl `
-  --engine C:\Tools\Pikafish.exe --movetime-ms 1000 --my-side red
+  --engine C:\Tools\Pikafish.exe --movetime-ms 1000 --my-side auto
 ```
 
-带 `--engine` 时，面板只在轮到我方时进行本地分析；默认我方是红方，执黑时改用
-`--my-side black`。残局接口返回的对方回合建议会被隐藏。
+带 `--engine` 时，面板只在轮到我方时进行本地分析。`auto` 会读取 JJ 人机模式的
+`isRed` 字段识别我方阵营；如果当前版本没有发送该字段，可以手动指定
+`--my-side red` 或 `--my-side black`。残局接口返回的对方回合建议会被隐藏。
 
 ## 设计边界
 
