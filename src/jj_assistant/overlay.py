@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import json
+import queue
+import threading
 import tkinter as tk
 from ctypes import wintypes
 from pathlib import Path
 
 from .board import XiangqiBoard
+from .engine import EngineError, PikafishEngine
 from .events import enrich_http_event
 from .notation import format_chinese_move
 from .protocol import parse_uci_move
@@ -14,10 +17,23 @@ from .protocol import parse_uci_move
 class SuggestionOverlay:
     """显示最新的服务器建议；不向 JJ 窗口发送点击或键盘输入。"""
 
-    def __init__(self, event_path: str | Path) -> None:
+    def __init__(
+        self,
+        event_path: str | Path,
+        *,
+        engine_path: str | Path | None = None,
+        movetime_ms: int = 1000,
+    ) -> None:
         self.event_path = Path(event_path)
         self.offset = 0
         self.challenge_board: XiangqiBoard | None = None
+        self.engine_path = Path(engine_path) if engine_path else None
+        self.movetime_ms = movetime_ms
+        self.engine: PikafishEngine | None = None
+        self.engine_busy = False
+        self.requested_fen: str | None = None
+        self.engine_results: queue.Queue[tuple[str, str | None, str | None]] = queue.Queue()
+        self.engine_lock = threading.Lock()
         self.root = tk.Tk()
         self.root.title("JJ 建议")
         self.root.overrideredirect(True)
@@ -50,6 +66,7 @@ class SuggestionOverlay:
             fg="#d1d5db",
         )
         self.detail_label.pack(anchor="w")
+        self.root.protocol("WM_DELETE_WINDOW", self.close)
         self._place_near_jj()
 
     def run(self) -> None:
@@ -57,6 +74,7 @@ class SuggestionOverlay:
         self.root.mainloop()
 
     def _poll_events(self) -> None:
+        self._drain_engine_results()
         if self.event_path.exists():
             with self.event_path.open("r", encoding="utf-8") as stream:
                 stream.seek(self.offset)
@@ -93,8 +111,57 @@ class SuggestionOverlay:
             )
         elif event.get("kind") == "move":
             state = event.get("game_state") or {}
-            self.value_label.configure(text="等待引擎分析…")
+            fen = state.get("fen")
+            if self.engine_path and isinstance(fen, str):
+                self.value_label.configure(text="正在分析…")
+                self._schedule_engine(fen)
+            else:
+                self.value_label.configure(text="等待引擎分析…")
             self.detail_label.configure(text=f"局面状态：{state.get('status', 'unknown')}")
+
+    def _schedule_engine(self, fen: str) -> None:
+        self.requested_fen = fen
+        if self.engine_busy:
+            return
+        self.engine_busy = True
+        threading.Thread(target=self._analyze_in_background, args=(fen,), daemon=True).start()
+
+    def _analyze_in_background(self, fen: str) -> None:
+        try:
+            with self.engine_lock:
+                if self.engine is None:
+                    assert self.engine_path is not None
+                    self.engine = PikafishEngine(self.engine_path)
+                uci = self.engine.best_move(fen, movetime_ms=self.movetime_ms)
+            self.engine_results.put((fen, uci, None))
+        except (EngineError, ValueError) as exc:
+            self.engine_results.put((fen, None, str(exc)))
+
+    def _drain_engine_results(self) -> None:
+        while True:
+            try:
+                fen, uci, error = self.engine_results.get_nowait()
+            except queue.Empty:
+                return
+            self.engine_busy = False
+            if fen == self.requested_fen:
+                if error:
+                    self.value_label.configure(text="引擎暂不可用")
+                    self.detail_label.configure(text=error)
+                elif uci:
+                    board = XiangqiBoard.from_fen(fen)
+                    move = parse_uci_move(uci)
+                    chinese = format_chinese_move(board, move) if move else uci
+                    self.value_label.configure(text=chinese)
+                    self.detail_label.configure(text=f"本地引擎 · 原始坐标：{uci}")
+            if self.requested_fen and self.requested_fen != fen:
+                self._schedule_engine(self.requested_fen)
+
+    def close(self) -> None:
+        if self.engine is not None:
+            self.engine.close()
+            self.engine = None
+        self.root.destroy()
 
     @staticmethod
     def _board_from_request(event: dict) -> XiangqiBoard | None:
@@ -133,6 +200,11 @@ class SuggestionOverlay:
         self.root.geometry("280x92+20+80")
 
 
-def run_overlay(event_path: str | Path) -> None:
-    SuggestionOverlay(event_path).run()
+def run_overlay(
+    event_path: str | Path,
+    *,
+    engine_path: str | Path | None = None,
+    movetime_ms: int = 1000,
+) -> None:
+    SuggestionOverlay(event_path, engine_path=engine_path, movetime_ms=movetime_ms).run()
 

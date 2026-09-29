@@ -8,7 +8,9 @@ from collections import Counter
 from pathlib import Path
 
 from .board import XiangqiBoard
+from .engine import EngineError, PikafishEngine
 from .events import enrich_http_event
+from .notation import format_uci_move
 from .protocol import MSG_CHESS_MOVE, extract_moves, parse_frame
 
 
@@ -94,6 +96,17 @@ def summarize(path: Path) -> int:
     return 0
 
 
+def engine_check(path: Path, fen: str, movetime_ms: int) -> int:
+    try:
+        with PikafishEngine(path) as engine:
+            uci = engine.best_move(fen, movetime_ms=movetime_ms)
+    except (EngineError, ValueError) as exc:
+        print(f"引擎检查失败：{exc}", file=sys.stderr)
+        return 2
+    print(f"Pikafish 建议：{format_uci_move(XiangqiBoard.from_fen(fen), uci)} ({uci})")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="JJ 象棋 AI 助手")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -102,6 +115,12 @@ def main(argv: list[str] | None = None) -> int:
     summary_parser.add_argument("path", type=Path)
     overlay_parser = subparsers.add_parser("overlay", help="显示置顶建议窗口")
     overlay_parser.add_argument("path", type=Path, nargs="?", default=Path("data/jj-events.jsonl"))
+    overlay_parser.add_argument("--engine", type=Path, help="可选的 Pikafish 可执行文件")
+    overlay_parser.add_argument("--movetime-ms", type=int, default=1000, help="引擎单次分析毫秒数")
+    engine_parser = subparsers.add_parser("engine-check", help="检查 Pikafish UCI 接口")
+    engine_parser.add_argument("path", type=Path)
+    engine_parser.add_argument("--fen", default=XiangqiBoard.initial().to_fen())
+    engine_parser.add_argument("--movetime-ms", type=int, default=1000)
     args = parser.parse_args(argv)
     if args.command == "self-check":
         return self_check()
@@ -110,8 +129,10 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "overlay":
         from .overlay import run_overlay
 
-        run_overlay(args.path)
+        run_overlay(args.path, engine_path=args.engine, movetime_ms=args.movetime_ms)
         return 0
+    if args.command == "engine-check":
+        return engine_check(args.path, args.fen, args.movetime_ms)
     return 2
 
 

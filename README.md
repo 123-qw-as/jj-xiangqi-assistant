@@ -10,6 +10,7 @@
 - 维护标准初始局面的 10×9 棋盘，按 JJ 坐标更新并输出 FEN。
 - 以 JSONL 保存诊断帧与走棋事件，方便核对当前协议。
 - 提供 mitmproxy 插件和 Windows 启动脚本。
+- 可选接入 Pikafish，在普通对局的走棋事件上做本地 UCI 分析。
 
 ## 安装开发环境
 
@@ -65,6 +66,17 @@ py -3.12 -m venv .venv
 
 面板只显示建议，不会向 JJ 窗口发送点击或键盘输入。
 面板主行显示中文记谱（例如“将四进一”），下方保留原始坐标，便于核对。
+
+如果要启用 Pikafish，请从[官方 Releases 页面](https://github.com/official-pikafish/Pikafish/releases)
+下载 Windows x86-64 universal 可执行文件，放到本机路径后运行：
+
+```powershell
+.\.venv\Scripts\python.exe -m jj_assistant engine-check C:\Tools\Pikafish.exe
+.\.venv\Scripts\python.exe -m jj_assistant overlay data\jj-events.jsonl `
+  --engine C:\Tools\Pikafish.exe --movetime-ms 1000
+```
+
+带 `--engine` 时，面板会对已识别的普通对局局面进行本地分析；残局接口返回的服务器建议仍优先显示。
 
 ## 设计边界
 
