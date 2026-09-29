@@ -50,12 +50,11 @@ def parse_frame(data: bytes) -> ParsedFrame:
 def extract_moves(frame: ParsedFrame) -> list[JJMove]:
     """从帧的任意嵌套位置提取 ``chessmove_ack_msg``。"""
 
-    if not isinstance(frame.payload, Mapping):
+    if frame.message_type != MSG_CHESS_MOVE or not isinstance(frame.payload, Mapping):
         return []
 
-    match_id = _first_value(frame.payload, ("matchid", "match_id", "matchId"))
     moves: list[JJMove] = []
-    for candidate in _named_mappings(frame.payload, "chessmove_ack_msg"):
+    for candidate, match_id in _move_mappings(frame.payload):
         try:
             move = JJMove(
                 from_x=_required_int(candidate, "beginposx"),
@@ -79,35 +78,33 @@ def payload_keys(payload: Any) -> list[str]:
     return sorted(str(key) for key in payload)
 
 
-def _named_mappings(value: Any, target: str) -> Iterator[Mapping[str, Any]]:
+def _move_mappings(
+    value: Any, inherited_match_id: str | int | None = None
+) -> Iterator[tuple[Mapping[str, Any], str | int | None]]:
     if isinstance(value, Mapping):
+        match_id = _direct_match_id(value)
+        if match_id is None:
+            match_id = inherited_match_id
         for key, child in value.items():
-            if key == target:
+            if key == "chessmove_ack_msg":
                 if isinstance(child, Mapping):
-                    yield child
+                    yield child, match_id
                 elif isinstance(child, list):
-                    yield from (item for item in child if isinstance(item, Mapping))
-            yield from _named_mappings(child, target)
+                    yield from (
+                        (item, match_id) for item in child if isinstance(item, Mapping)
+                    )
+                continue
+            yield from _move_mappings(child, match_id)
     elif isinstance(value, list):
         for child in value:
-            yield from _named_mappings(child, target)
+            yield from _move_mappings(child, inherited_match_id)
 
 
-def _first_value(value: Any, keys: tuple[str, ...]) -> str | int | None:
-    if isinstance(value, Mapping):
-        for key in keys:
-            candidate = value.get(key)
-            if isinstance(candidate, (str, int)) and not isinstance(candidate, bool):
-                return candidate
-        for child in value.values():
-            found = _first_value(child, keys)
-            if found is not None:
-                return found
-    elif isinstance(value, list):
-        for child in value:
-            found = _first_value(child, keys)
-            if found is not None:
-                return found
+def _direct_match_id(value: Mapping[str, Any]) -> str | int | None:
+    for key in ("matchid", "match_id", "matchId"):
+        candidate = value.get(key)
+        if isinstance(candidate, (str, int)) and not isinstance(candidate, bool):
+            return candidate
     return None
 
 

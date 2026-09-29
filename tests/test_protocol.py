@@ -60,3 +60,43 @@ def test_ignores_invalid_move_coordinates():
     payload = {"chessmove_ack_msg": {"beginposx": 99, "beginposy": 0, "endposx": 0, "endposy": 1}}
     assert extract_moves(parse_frame(make_frame(payload))) == []
 
+
+def test_ignores_move_shape_in_unrelated_message_type():
+    payload = {
+        "chessmove_ack_msg": {
+            "beginposx": 0,
+            "beginposy": 3,
+            "endposx": 0,
+            "endposy": 4,
+        }
+    }
+    assert extract_moves(parse_frame(make_frame(payload, message_type=7))) == []
+
+
+def test_uses_nearest_match_id_for_each_move_branch():
+    payload = {
+        "matchid": "outer",
+        "games": [
+            {
+                "matchid": "first",
+                "chessmove_ack_msg": {
+                    "beginposx": 0,
+                    "beginposy": 3,
+                    "endposx": 0,
+                    "endposy": 4,
+                },
+            },
+            {
+                "matchid": "second",
+                "chessmove_ack_msg": {
+                    "beginposx": 2,
+                    "beginposy": 3,
+                    "endposx": 2,
+                    "endposy": 4,
+                },
+            },
+        ],
+    }
+    moves = extract_moves(parse_frame(make_frame(payload)))
+    assert [move.match_id for move in moves] == ["first", "second"]
+

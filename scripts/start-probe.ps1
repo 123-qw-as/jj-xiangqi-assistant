@@ -21,25 +21,23 @@ $arguments = @(
     "--set", "jj_output=$OutputPath"
 )
 
-if ($Mode -eq "Local") {
+$ModeDescription = if ($Mode -eq "Local") {
     $arguments += @("--mode", "local:WeChatAppEx.exe")
+    "按进程捕获：WeChatAppEx.exe"
 } else {
     $arguments += @(
         "--mode", "regular",
         "--listen-host", "127.0.0.1",
         "--listen-port", $Port
     )
+    "监听 127.0.0.1:$Port"
 }
 
 if ($CaptureUnknown) {
     $arguments += @("--set", "jj_capture_unknown=true")
 }
 
-if ($Mode -eq "Local") {
-    Write-Host "JJ 协议探针按进程捕获：WeChatAppEx.exe"
-} else {
-    Write-Host "JJ 协议探针监听 127.0.0.1:$Port"
-}
+Write-Host "JJ 协议探针$ModeDescription"
 Write-Host "事件输出：$OutputPath"
 Write-Host "此脚本不会修改 Windows 系统代理，也不会安装证书。按 Ctrl+C 停止。"
 & $MitmDump @arguments

@@ -14,7 +14,7 @@
 ## 验证步骤
 
 1. 执行 `scripts\probe-status.ps1`，确认没有遗留探针进程。
-2. 经用户确认后执行 `scripts\install-probe-ca.ps1`。它只向 `Cert:\CurrentUser\Root` 导入 `%USERPROFILE%\.mitmproxy\mitmproxy-ca-cert.cer`。
+2. 经用户确认后执行 `scripts\install-probe-ca.ps1`。证书不存在时脚本先在隐藏的临时 mitmdump 进程中生成，然后只向 `Cert:\CurrentUser\Root` 导入该证书，并在项目根目录保存精确指纹供卸载使用。
 3. 执行 `scripts\start-probe.ps1`。默认仅捕获 `WeChatAppEx.exe`。
 4. 重新进入 JJ 象棋对局，至少完成十步，期间观察终端是否出现 `JJ MOVE`。
 5. 按 `Ctrl+C` 停止探针。
@@ -23,7 +23,7 @@
 
 ## 成功标准
 
-- 日志出现消息类型 `0x03F3`。
+- 日志出现消息类型 `0x03F3`，每步包含 `game_state.fen`。
 - 至少十步的起终点坐标与画面全部一致。
 - 重新开局后能区分新的 `match_id`，没有重复或漏步。
 - 能确定每一步的 `seat` 和当前行棋方。

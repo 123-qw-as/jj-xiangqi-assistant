@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from .protocol import extract_moves, parse_frame, payload_keys
+from .state import GameState
 
 
 class EventWriter:
@@ -14,6 +15,7 @@ class EventWriter:
         self.output_path = Path(output_path)
         self.capture_unknown = capture_unknown
         self._lock = threading.Lock()
+        self._games: dict[str, GameState] = {}
 
     def record_frame(
         self,
@@ -51,7 +53,16 @@ class EventWriter:
         events: list[dict[str, Any]] = []
         if moves:
             for move in moves:
-                events.append({**base, "kind": "move", "move": move.as_dict()})
+                state_key = str(move.match_id) if move.match_id is not None else f"unknown@{host}"
+                game = self._games.setdefault(state_key, GameState())
+                events.append(
+                    {
+                        **base,
+                        "kind": "move",
+                        "move": move.as_dict(),
+                        "game_state": game.apply(move),
+                    }
+                )
         else:
             event = {**base, "kind": "frame"}
             if self.capture_unknown:

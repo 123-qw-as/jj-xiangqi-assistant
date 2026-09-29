@@ -15,7 +15,7 @@ def test_applies_jj_coordinates_and_flips_side():
 
     assert captured is None
     assert board.to_fen() == (
-        "rnbakabnr/9/1c5c1/p1p1p1p1p/9/P8/2P1P1P1P/1C5C1/9/RNBAKABNR b"
+        "rnbakabnr/9/1c5c1/p1p1p1p1p/9/P8/2P1P1P1P/1C5C1/9/RNBAKABNR b - - 0 1"
     )
 
 

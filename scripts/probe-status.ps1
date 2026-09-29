@@ -1,12 +1,11 @@
-$CertificatePath = Join-Path $env:USERPROFILE ".mitmproxy\mitmproxy-ca-cert.cer"
-$CertificateStatus = "未生成"
-$Thumbprint = $null
+. (Join-Path $PSScriptRoot "probe-common.ps1")
 
-if (Test-Path -LiteralPath $CertificatePath) {
-    $Certificate = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2($CertificatePath)
-    $Thumbprint = $Certificate.Thumbprint
+$CertificateStatus = "未生成"
+$Thumbprint = Get-ProbeCertificateThumbprint
+
+if ($Thumbprint) {
     $Installed = Get-ChildItem Cert:\CurrentUser\Root | Where-Object Thumbprint -eq $Thumbprint
-    $CertificateStatus = if ($Installed) { "已安装到当前用户 Root" } else { "已生成、未安装" }
+    $CertificateStatus = if ($Installed) { "已安装到当前用户 Root" } else { "已生成或已记录、未安装" }
 }
 
 $ProbeProcesses = Get-CimInstance Win32_Process | Where-Object {

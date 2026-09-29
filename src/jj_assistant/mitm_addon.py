@@ -20,6 +20,12 @@ class JJWebSocketProbe:
     def load(self, loader) -> None:  # pragma: no cover - 由 mitmproxy 调用
         loader.add_option("jj_output", str, "data/jj-events.jsonl", "JJ 事件 JSONL 输出路径")
         loader.add_option("jj_capture_unknown", bool, False, "保存未知 JSON 负载")
+        loader.add_option(
+            "jj_hosts",
+            str,
+            "wxminigame.srv.jjmatch.cn",
+            "逗号分隔的 JJ 游戏 WebSocket 域名",
+        )
 
     def running(self) -> None:  # pragma: no cover - 由 mitmproxy 调用
         output = Path(ctx.options.jj_output).resolve()
@@ -33,6 +39,11 @@ class JJWebSocketProbe:
         if message.is_text:
             return
         host = flow.request.pretty_host if flow.request else None
+        allowed_hosts = {
+            item.strip().lower() for item in ctx.options.jj_hosts.split(",") if item.strip()
+        }
+        if host is None or host.lower() not in allowed_hosts:
+            return
         events = self.writer.record_frame(
             bytes(message.content), from_client=message.from_client, host=host
         )

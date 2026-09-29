@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 
 from .models import JJMove
 
-INITIAL_FEN = "rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR w"
+INITIAL_FEN = "rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR w - - 0 1"
 
 
 @dataclass(slots=True)
@@ -13,6 +13,8 @@ class XiangqiBoard:
 
     rows: list[list[str | None]] = field(default_factory=list)
     red_to_move: bool = True
+    halfmove_clock: int = 0
+    fullmove_number: int = 1
 
     @classmethod
     def initial(cls) -> XiangqiBoard:
@@ -38,7 +40,14 @@ class XiangqiBoard:
             if len(row) != 9:
                 raise ValueError("每一行必须展开为 9 列")
             rows.append(row)
-        return cls(rows=rows, red_to_move=len(parts) < 2 or parts[1] == "w")
+        halfmove_clock = int(parts[4]) if len(parts) > 4 else 0
+        fullmove_number = int(parts[5]) if len(parts) > 5 else 1
+        return cls(
+            rows=rows,
+            red_to_move=len(parts) < 2 or parts[1] == "w",
+            halfmove_clock=halfmove_clock,
+            fullmove_number=fullmove_number,
+        )
 
     def apply(self, move: JJMove) -> str | None:
         source_row = 9 - move.from_y
@@ -51,7 +60,11 @@ class XiangqiBoard:
         captured = self.rows[target_row][move.to_x]
         self.rows[target_row][move.to_x] = piece
         self.rows[source_row][move.from_x] = None
+        moved_by_red = self.red_to_move
         self.red_to_move = not self.red_to_move
+        self.halfmove_clock = 0
+        if not moved_by_red:
+            self.fullmove_number += 1
         return captured
 
     def to_fen(self) -> str:
@@ -70,5 +83,8 @@ class XiangqiBoard:
             if empty:
                 parts.append(str(empty))
             encoded_rows.append("".join(parts))
-        return f"{'/'.join(encoded_rows)} {'w' if self.red_to_move else 'b'}"
+        return (
+            f"{'/'.join(encoded_rows)} {'w' if self.red_to_move else 'b'} "
+            f"- - {self.halfmove_clock} {self.fullmove_number}"
+        )
 

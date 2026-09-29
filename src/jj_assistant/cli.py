@@ -64,15 +64,20 @@ def summarize(path: Path) -> int:
             if "message_type_hex" in event:
                 types[event["message_type_hex"]] += 1
             if event.get("kind") == "move":
-                moves.append(event["move"])
+                moves.append(event)
     print("事件统计：", dict(counts))
     print("消息类型：", dict(types))
     print(f"已识别走棋：{len(moves)} 步")
-    for index, move in enumerate(moves[-10:], start=max(1, len(moves) - 9)):
+    for index, event in enumerate(moves[-10:], start=max(1, len(moves) - 9)):
+        move = event["move"]
+        game_state = event.get("game_state", {})
         print(
             f"  {index}. ({move['from_x']},{move['from_y']}) -> "
-            f"({move['to_x']},{move['to_y']}) seat={move.get('seat')}"
+            f"({move['to_x']},{move['to_y']}) seat={move.get('seat')} "
+            f"state={game_state.get('status')}"
         )
+        if game_state.get("fen"):
+            print(f"     FEN: {game_state['fen']}")
     return 0
 
 

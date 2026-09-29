@@ -29,6 +29,8 @@ def test_writer_records_minimal_move_event(tmp_path):
     assert events[0]["kind"] == "move"
     saved = json.loads(output.read_text(encoding="utf-8"))
     assert saved["move"]["match_id"] == "m1"
+    assert saved["game_state"]["status"] == "applied"
+    assert saved["game_state"]["fen"].endswith(" b - - 0 1")
     assert "payload" not in saved
 
 
@@ -40,4 +42,23 @@ def test_writer_does_not_store_unknown_payload_by_default(tmp_path):
     assert saved["kind"] == "frame"
     assert saved["payload_keys"] == ["token"]
     assert "payload" not in saved
+
+
+def test_writer_deduplicates_repeated_move(tmp_path):
+    output = tmp_path / "events.jsonl"
+    writer = EventWriter(output)
+    payload = {
+        "matchid": "m1",
+        "chessmove_ack_msg": {
+            "beginposx": 0,
+            "beginposy": 3,
+            "endposx": 0,
+            "endposy": 4,
+            "seat": 1,
+        },
+    }
+    writer.record_frame(frame(payload), from_client=False)
+    events = writer.record_frame(frame(payload), from_client=False)
+    assert events[0]["game_state"]["status"] == "duplicate"
+    assert events[0]["game_state"]["applied_moves"] == 1
 
