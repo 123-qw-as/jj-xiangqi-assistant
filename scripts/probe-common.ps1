@@ -1,6 +1,7 @@
 $ProbeProjectRoot = Split-Path -Parent $PSScriptRoot
 $ProbeMitmDump = Join-Path $ProbeProjectRoot ".venv\Scripts\mitmdump.exe"
-$ProbeCertificatePath = Join-Path $env:USERPROFILE ".mitmproxy\mitmproxy-ca-cert.cer"
+$ProbeConfDir = Join-Path $ProbeProjectRoot "data\mitmproxy"
+$ProbeCertificatePath = Join-Path $ProbeConfDir "mitmproxy-ca-cert.cer"
 $ProbeThumbprintPath = Join-Path $ProbeProjectRoot ".probe-ca-thumbprint"
 
 function Get-ProbeCertificateThumbprint {
@@ -29,7 +30,12 @@ function New-ProbeCertificateIfMissing {
 
     $Process = Start-Process `
         -FilePath $ProbeMitmDump `
-        -ArgumentList @("--mode", "regular", "--listen-host", "127.0.0.1", "--listen-port", "0") `
+        -ArgumentList @(
+            "--mode", "regular",
+            "--listen-host", "127.0.0.1",
+            "--listen-port", "0",
+            "--set", "confdir=$ProbeConfDir"
+        ) `
         -WorkingDirectory $ProbeProjectRoot `
         -WindowStyle Hidden `
         -PassThru

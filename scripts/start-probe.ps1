@@ -7,18 +7,19 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$ProjectRoot = Split-Path -Parent $PSScriptRoot
-$MitmDump = Join-Path $ProjectRoot ".venv\Scripts\mitmdump.exe"
-$Addon = Join-Path $ProjectRoot "src\jj_assistant\mitm_addon.py"
-$OutputPath = Join-Path $ProjectRoot $Output
+. (Join-Path $PSScriptRoot "probe-common.ps1")
 
-if (-not (Test-Path -LiteralPath $MitmDump)) {
-    throw "未找到 $MitmDump。请先安装开发环境：.\.venv\Scripts\python.exe -m pip install `".[dev,probe]`""
+$Addon = Join-Path $ProbeProjectRoot "src\jj_assistant\mitm_addon.py"
+$OutputPath = Join-Path $ProbeProjectRoot $Output
+
+if (-not (Test-Path -LiteralPath $ProbeMitmDump)) {
+    throw "未找到 $ProbeMitmDump。请先安装开发环境：.\.venv\Scripts\python.exe -m pip install `".[dev,probe]`""
 }
 
 $arguments = @(
     "-s", $Addon,
-    "--set", "jj_output=$OutputPath"
+    "--set", "jj_output=$OutputPath",
+    "--set", "confdir=$ProbeConfDir"
 )
 
 $ModeDescription = if ($Mode -eq "Local") {
@@ -40,6 +41,6 @@ if ($CaptureUnknown) {
 Write-Host "JJ 协议探针$ModeDescription"
 Write-Host "事件输出：$OutputPath"
 Write-Host "此脚本不会修改 Windows 系统代理，也不会安装证书。按 Ctrl+C 停止。"
-& $MitmDump @arguments
+& $ProbeMitmDump @arguments
 
 

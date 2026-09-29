@@ -26,7 +26,7 @@ py -3.12 -m venv .venv
 
 ## 启动网络探针
 
-经过用户确认后，生成一套仅属于当前电脑的 CA，并安装到当前用户证书库：
+经过用户确认后，在项目的 `data/mitmproxy` 中生成一套专用 CA，并安装到当前用户证书库：
 
 ```powershell
 .\scripts\install-probe-ca.ps1

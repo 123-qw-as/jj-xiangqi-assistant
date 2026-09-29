@@ -14,7 +14,7 @@
 ## 验证步骤
 
 1. 执行 `scripts\probe-status.ps1`，确认没有遗留探针进程。
-2. 经用户确认后执行 `scripts\install-probe-ca.ps1`。证书不存在时脚本先在隐藏的临时 mitmdump 进程中生成，然后只向 `Cert:\CurrentUser\Root` 导入该证书，并在项目根目录保存精确指纹供卸载使用。
+2. 经用户确认后执行 `scripts\install-probe-ca.ps1`。证书不存在时脚本先在隐藏的临时 mitmdump 进程中生成项目专用 `data\mitmproxy` CA，然后只向 `Cert:\CurrentUser\Root` 导入该证书，并在项目根目录保存精确指纹供卸载使用。
 3. 执行 `scripts\start-probe.ps1`。默认仅捕获 `WeChatAppEx.exe`。
 4. 重新进入 JJ 象棋对局，至少完成十步，期间观察终端是否出现 `JJ MOVE`。
 5. 按 `Ctrl+C` 停止探针。
