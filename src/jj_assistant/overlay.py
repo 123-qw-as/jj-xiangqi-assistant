@@ -23,12 +23,16 @@ class SuggestionOverlay:
         *,
         engine_path: str | Path | None = None,
         movetime_ms: int = 1000,
+        my_side: str = "red",
     ) -> None:
+        if my_side not in {"red", "black"}:
+            raise ValueError("我方阵营必须是 red 或 black")
         self.event_path = Path(event_path)
         self.offset = 0
         self.challenge_board: XiangqiBoard | None = None
         self.engine_path = Path(engine_path) if engine_path else None
         self.movetime_ms = movetime_ms
+        self.my_side = my_side
         self.engine: PikafishEngine | None = None
         self.engine_busy = False
         self.requested_fen: str | None = None
@@ -95,6 +99,10 @@ class SuggestionOverlay:
         suggestion = event.get("suggestion")
         if suggestion:
             uci = suggestion.get("uci", "未知走法")
+            if self.challenge_board is not None and self._side_to_move() != self.my_side:
+                self.value_label.configure(text="等待我方回合…")
+                self.detail_label.configure(text=f"已忽略对方建议 · 原始坐标：{uci}")
+                return
             move = parse_uci_move(uci)
             chinese = (
                 format_chinese_move(self.challenge_board, move)
@@ -112,12 +120,30 @@ class SuggestionOverlay:
         elif event.get("kind") == "move":
             state = event.get("game_state") or {}
             fen = state.get("fen")
-            if self.engine_path and isinstance(fen, str):
+            if isinstance(fen, str) and self._fen_side(fen) != self.my_side:
+                self.value_label.configure(text="等待对方走子…")
+                self.detail_label.configure(
+                    text=f"当前不是我方回合，跳过这一步 · 状态：{state.get('status', 'unknown')}"
+                )
+            elif self.engine_path and isinstance(fen, str):
                 self.value_label.configure(text="正在分析…")
+                self.detail_label.configure(text="我方回合 · 正在调用 Pikafish")
                 self._schedule_engine(fen)
             else:
                 self.value_label.configure(text="等待引擎分析…")
-            self.detail_label.configure(text=f"局面状态：{state.get('status', 'unknown')}")
+                self.detail_label.configure(text=f"局面状态：{state.get('status', 'unknown')}")
+
+    def _side_to_move(self) -> str | None:
+        if self.challenge_board is None:
+            return None
+        return "red" if self.challenge_board.red_to_move else "black"
+
+    @staticmethod
+    def _fen_side(fen: str) -> str | None:
+        parts = fen.split()
+        if len(parts) < 2 or parts[1] not in {"w", "b"}:
+            return None
+        return "red" if parts[1] == "w" else "black"
 
     def _schedule_engine(self, fen: str) -> None:
         self.requested_fen = fen
@@ -205,6 +231,12 @@ def run_overlay(
     *,
     engine_path: str | Path | None = None,
     movetime_ms: int = 1000,
+    my_side: str = "red",
 ) -> None:
-    SuggestionOverlay(event_path, engine_path=engine_path, movetime_ms=movetime_ms).run()
+    SuggestionOverlay(
+        event_path,
+        engine_path=engine_path,
+        movetime_ms=movetime_ms,
+        my_side=my_side,
+    ).run()
 

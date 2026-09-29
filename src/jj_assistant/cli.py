@@ -117,6 +117,12 @@ def main(argv: list[str] | None = None) -> int:
     overlay_parser.add_argument("path", type=Path, nargs="?", default=Path("data/jj-events.jsonl"))
     overlay_parser.add_argument("--engine", type=Path, help="可选的 Pikafish 可执行文件")
     overlay_parser.add_argument("--movetime-ms", type=int, default=1000, help="引擎单次分析毫秒数")
+    overlay_parser.add_argument(
+        "--my-side",
+        choices=("red", "black"),
+        default="red",
+        help="我方阵营，默认 red（红方）",
+    )
     engine_parser = subparsers.add_parser("engine-check", help="检查 Pikafish UCI 接口")
     engine_parser.add_argument("path", type=Path)
     engine_parser.add_argument("--fen", default=XiangqiBoard.initial().to_fen())
@@ -129,7 +135,12 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "overlay":
         from .overlay import run_overlay
 
-        run_overlay(args.path, engine_path=args.engine, movetime_ms=args.movetime_ms)
+        run_overlay(
+            args.path,
+            engine_path=args.engine,
+            movetime_ms=args.movetime_ms,
+            my_side=args.my_side,
+        )
         return 0
     if args.command == "engine-check":
         return engine_check(args.path, args.fen, args.movetime_ms)

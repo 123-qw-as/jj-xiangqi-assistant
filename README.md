@@ -73,10 +73,11 @@ py -3.12 -m venv .venv
 ```powershell
 .\.venv\Scripts\python.exe -m jj_assistant engine-check C:\Tools\Pikafish.exe
 .\.venv\Scripts\python.exe -m jj_assistant overlay data\jj-events.jsonl `
-  --engine C:\Tools\Pikafish.exe --movetime-ms 1000
+  --engine C:\Tools\Pikafish.exe --movetime-ms 1000 --my-side red
 ```
 
-带 `--engine` 时，面板会对已识别的普通对局局面进行本地分析；残局接口返回的服务器建议仍优先显示。
+带 `--engine` 时，面板只在轮到我方时进行本地分析；默认我方是红方，执黑时改用
+`--my-side black`。残局接口返回的对方回合建议会被隐藏。
 
 ## 设计边界
 
