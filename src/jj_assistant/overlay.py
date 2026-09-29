@@ -18,6 +18,8 @@ from .protocol import parse_uci_move
 class SuggestionOverlay:
     """显示最新的服务器建议；不向 JJ 窗口发送点击或键盘输入。"""
 
+    MAX_REPLAY_BYTES = 128 * 1024
+
     def __init__(
         self,
         event_path: str | Path,
@@ -29,7 +31,7 @@ class SuggestionOverlay:
         if my_side not in {"auto", "red", "black"}:
             raise ValueError("我方阵营必须是 auto、red 或 black")
         self.event_path = Path(event_path)
-        self.offset = 0
+        self.offset = self._initial_offset()
         self.challenge_board: XiangqiBoard | None = None
         self.engine_path = Path(engine_path) if engine_path else None
         self.movetime_ms = movetime_ms
@@ -74,6 +76,23 @@ class SuggestionOverlay:
         self.detail_label.pack(anchor="w")
         self.root.protocol("WM_DELETE_WINDOW", self.close)
         self._place_near_jj()
+
+    def _initial_offset(self) -> int:
+        """只重放日志尾部，避免历史局面一次性挤满引擎队列。"""
+
+        try:
+            size = self.event_path.stat().st_size
+        except OSError:
+            return 0
+        if size <= self.MAX_REPLAY_BYTES:
+            return 0
+        try:
+            with self.event_path.open("rb") as stream:
+                stream.seek(size - self.MAX_REPLAY_BYTES)
+                stream.readline()
+                return stream.tell()
+        except OSError:
+            return 0
 
     def run(self) -> None:
         self._poll_events()

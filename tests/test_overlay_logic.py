@@ -16,6 +16,18 @@ def test_fen_side_mapping():
     assert SuggestionOverlay._fen_side("invalid") is None
 
 
+def test_overlay_replays_only_recent_log_tail(tmp_path):
+    path = tmp_path / "events.jsonl"
+    path.write_bytes(b"old event\n" * 10 + b"latest event\n")
+    overlay = object.__new__(SuggestionOverlay)
+    overlay.event_path = path
+    overlay.MAX_REPLAY_BYTES = 20
+
+    offset = overlay._initial_offset()
+
+    assert path.read_bytes()[offset:] == b"latest event\n"
+
+
 def test_server_opponent_move_is_applied_before_local_analysis():
     overlay = object.__new__(SuggestionOverlay)
     overlay.challenge_board = XiangqiBoard.initial()
