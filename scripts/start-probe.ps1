@@ -19,7 +19,8 @@ if (-not (Test-Path -LiteralPath $ProbeMitmDump)) {
 $arguments = @(
     "-s", $Addon,
     "--set", "jj_output=$OutputPath",
-    "--set", "confdir=$ProbeConfDir"
+    "--set", "confdir=$ProbeConfDir",
+    "--set", "flow_detail=0"
 )
 
 $ModeDescription = if ($Mode -eq "Local") {

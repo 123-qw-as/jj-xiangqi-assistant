@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import struct
 from collections.abc import Iterator, Mapping
 from typing import Any
@@ -11,6 +12,7 @@ HEADER_SIZE = 8
 MSG_CHESS_MOVE = 0x03F3
 MSG_ACK = 0x0000
 MSG_LOBBY = 0x14801
+UCI_MOVE_RE = re.compile(r"^[a-i][0-9][a-i][0-9](?:[a-i])?$")
 
 
 class ProtocolError(ValueError):
@@ -76,6 +78,43 @@ def payload_keys(payload: Any) -> list[str]:
     if not isinstance(payload, Mapping):
         return []
     return sorted(str(key) for key in payload)
+
+
+def parse_uci_move(value: Any) -> JJMove | None:
+    """把 Pikafish 的 ``a0a1`` 坐标转换为 JJ 坐标。"""
+
+    if not isinstance(value, str) or not UCI_MOVE_RE.fullmatch(value):
+        return None
+    try:
+        return JJMove(
+            from_x=ord(value[0]) - ord("a"),
+            from_y=int(value[1]),
+            to_x=ord(value[2]) - ord("a"),
+            to_y=int(value[3]),
+        )
+    except ValueError:
+        return None
+
+
+def parse_position_order(order: Any) -> tuple[str, list[JJMove]] | None:
+    """解析 ``position fen ... moves ...`` 命令。"""
+
+    if not isinstance(order, str) or not order.startswith("position fen "):
+        return None
+    tokens = order[len("position fen ") :].split()
+    if len(tokens) < 6 or len(tokens[0].split("/")) != 10:
+        return None
+    fen = " ".join(tokens[:6])
+    try:
+        move_start = tokens.index("moves")
+    except ValueError:
+        move_tokens: list[str] = []
+    else:
+        move_tokens = tokens[move_start + 1 :]
+    parsed_moves = [parse_uci_move(token) for token in move_tokens]
+    if any(move is None for move in parsed_moves):
+        return None
+    return fen, [move for move in parsed_moves if move is not None]
 
 
 def _move_mappings(

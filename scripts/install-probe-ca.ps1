@@ -14,7 +14,15 @@ if ($Existing) {
 }
 
 Import-Certificate -FilePath $ProbeCertificatePath -CertStoreLocation Cert:\CurrentUser\Root | Out-Null
-$Installed = Get-ChildItem Cert:\CurrentUser\Root | Where-Object Thumbprint -eq $Certificate.Thumbprint
+$Installed = $null
+for ($Attempt = 0; $Attempt -lt 20; $Attempt++) {
+    $Installed = Get-ChildItem Cert:\CurrentUser\Root |
+        Where-Object Thumbprint -eq $Certificate.Thumbprint
+    if ($Installed) {
+        break
+    }
+    Start-Sleep -Milliseconds 100
+}
 if (-not $Installed) {
     throw "证书导入后未在当前用户 Root 证书库中找到。"
 }

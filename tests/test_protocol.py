@@ -3,7 +3,14 @@ import struct
 
 import pytest
 
-from jj_assistant.protocol import MSG_CHESS_MOVE, ProtocolError, extract_moves, parse_frame
+from jj_assistant.protocol import (
+    MSG_CHESS_MOVE,
+    ProtocolError,
+    extract_moves,
+    parse_frame,
+    parse_position_order,
+    parse_uci_move,
+)
 
 
 def make_frame(payload, message_type=MSG_CHESS_MOVE, trailing=b""):
@@ -99,4 +106,18 @@ def test_uses_nearest_match_id_for_each_move_branch():
     }
     moves = extract_moves(parse_frame(make_frame(payload)))
     assert [move.match_id for move in moves] == ["first", "second"]
+
+
+def test_parses_uci_move_and_position_order():
+    move = parse_uci_move("e9g8")
+    assert move is not None
+    assert (move.from_x, move.from_y, move.to_x, move.to_y) == (4, 9, 6, 8)
+
+    parsed = parse_position_order(
+        "position fen 3kn3C/2P1a4/5a2N/9/9/9/9/7RC/1crp1p3/4K4 b - - 0 10 moves e9g8 h2h9"
+    )
+    assert parsed is not None
+    fen, history = parsed
+    assert fen.endswith(" b - - 0 10")
+    assert [(item.from_x, item.to_y) for item in history] == [(4, 8), (7, 9)]
 

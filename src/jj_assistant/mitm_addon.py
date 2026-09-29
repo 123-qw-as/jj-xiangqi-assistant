@@ -12,6 +12,8 @@ except ImportError:  # 允许在未安装 probe 依赖时导入核心包
 
 from jj_assistant.events import EventWriter
 
+CHALLENGE_MOVE_PATH = "/api/v1/chess/move"
+
 
 class JJWebSocketProbe:
     def __init__(self) -> None:
@@ -55,6 +57,37 @@ class JJWebSocketProbe:
                     f"({move['from_x']},{move['from_y']}) -> ({move['to_x']},{move['to_y']}) "
                     f"seat={move['seat']} match={move['match_id']}"
                 )
+
+    def request(self, flow) -> None:  # pragma: no cover - 由 mitmproxy 调用
+        if self.writer is None or not _is_challenge_move(flow):
+            return
+        event = self.writer.record_http(
+            kind="http_request",
+            method=flow.request.method,
+            host=flow.request.pretty_host,
+            path=CHALLENGE_MOVE_PATH,
+            data=flow.request.raw_content or b"",
+        )
+        ctx.log.alert(f"JJ CHALLENGE REQUEST {event['body']}")
+
+    def response(self, flow) -> None:  # pragma: no cover - 由 mitmproxy 调用
+        if self.writer is None or flow.response is None or not _is_challenge_move(flow):
+            return
+        event = self.writer.record_http(
+            kind="http_response",
+            method=flow.request.method,
+            host=flow.request.pretty_host,
+            path=CHALLENGE_MOVE_PATH,
+            data=flow.response.raw_content or b"",
+            status_code=flow.response.status_code,
+        )
+        ctx.log.alert(f"JJ CHALLENGE RESPONSE {event['body']}")
+
+
+def _is_challenge_move(flow) -> bool:
+    if flow.request is None or flow.request.method.upper() != "POST":
+        return False
+    return flow.request.path.split("?", 1)[0] == CHALLENGE_MOVE_PATH
 
 
 addons = [JJWebSocketProbe()]

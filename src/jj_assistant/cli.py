@@ -51,6 +51,7 @@ def summarize(path: Path) -> int:
     counts: Counter[str] = Counter()
     types: Counter[str] = Counter()
     moves = []
+    suggestions = []
     with path.open(encoding="utf-8") as stream:
         for line_number, line in enumerate(stream, start=1):
             if not line.strip():
@@ -65,9 +66,18 @@ def summarize(path: Path) -> int:
                 types[event["message_type_hex"]] += 1
             if event.get("kind") == "move":
                 moves.append(event)
+            if event.get("suggestion"):
+                suggestions.append(event["suggestion"])
     print("事件统计：", dict(counts))
     print("消息类型：", dict(types))
     print(f"已识别走棋：{len(moves)} 步")
+    challenge_requests = counts["http_request"]
+    challenge_responses = counts["http_response"]
+    if challenge_requests or challenge_responses:
+        print(f"残局接口：{challenge_requests} 个请求 / {challenge_responses} 个响应")
+        print(f"残局推荐走法：{len(suggestions)} 个")
+        for suggestion in suggestions[-5:]:
+            print(f"  suggestion: {suggestion['uci']}")
     for index, event in enumerate(moves[-10:], start=max(1, len(moves) - 9)):
         move = event["move"]
         game_state = event.get("game_state", {})

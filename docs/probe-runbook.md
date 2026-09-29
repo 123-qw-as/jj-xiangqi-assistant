@@ -9,6 +9,7 @@
 - 微信小程序宿主进程：`WeChatAppEx.exe`。
 - WMPF 运行时版本：`25715`。
 - mitmproxy Windows local capture 可以截获该进程访问 `wxminigame.srv.jjmatch.cn` 和 `aetcollector.srv.jjmatch.cn` 的 TLS 连接。
+- 实测残局闯关通过 `POST /api/v1/chess/move` 请求计算着法，普通大厅连接仍使用二进制 WebSocket。
 - 未安装探针 CA 时，JJ 会以 `certificate unknown` 拒绝 TLS 握手；停止探针后连接恢复。
 
 ## 验证步骤
@@ -24,6 +25,7 @@
 ## 成功标准
 
 - 日志出现消息类型 `0x03F3`，每步包含 `game_state.fen`。
+- 第 2 关等残局模式出现 `http_request`/`http_response`，请求中的 `challenge_state.initial_fen` 和响应中的 `suggestion.uci` 均可读取。
 - 至少十步的起终点坐标与画面全部一致。
 - 重新开局后能区分新的 `match_id`，没有重复或漏步。
 - 能确定每一步的 `seat` 和当前行棋方。
