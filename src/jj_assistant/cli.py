@@ -8,6 +8,7 @@ from collections import Counter
 from pathlib import Path
 
 from .board import XiangqiBoard
+from .events import enrich_http_event
 from .protocol import MSG_CHESS_MOVE, extract_moves, parse_frame
 
 
@@ -61,6 +62,8 @@ def summarize(path: Path) -> int:
             except json.JSONDecodeError:
                 print(f"忽略第 {line_number} 行：不是 JSON", file=sys.stderr)
                 continue
+            if event.get("kind") in {"http_request", "http_response"}:
+                enrich_http_event(event)
             counts[event.get("kind", "unknown")] += 1
             if "message_type_hex" in event:
                 types[event["message_type_hex"]] += 1

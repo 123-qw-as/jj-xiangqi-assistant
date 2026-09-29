@@ -111,7 +111,7 @@ class EventWriter:
             except json.JSONDecodeError:
                 event["body_encoding"] = "utf-8"
                 event["body"] = text
-        _add_challenge_fields(event)
+        enrich_http_event(event)
         self._append(event)
         return event
 
@@ -122,7 +122,7 @@ class EventWriter:
             stream.write(line + "\n")
 
 
-def _add_challenge_fields(event: dict[str, Any]) -> None:
+def enrich_http_event(event: dict[str, Any]) -> None:
     body = event.get("body")
     if not isinstance(body, dict) or event["path"] != "/api/v1/chess/move":
         return
