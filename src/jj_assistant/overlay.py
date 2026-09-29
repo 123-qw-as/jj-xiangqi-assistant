@@ -10,6 +10,7 @@ from pathlib import Path
 from .board import XiangqiBoard
 from .engine import EngineError, PikafishEngine
 from .events import enrich_http_event
+from .models import JJMove
 from .notation import format_chinese_move
 from .protocol import parse_uci_move
 
@@ -98,25 +99,7 @@ class SuggestionOverlay:
             self.challenge_board = self._board_from_request(event)
         suggestion = event.get("suggestion")
         if suggestion:
-            uci = suggestion.get("uci", "未知走法")
-            if self.challenge_board is not None and self._side_to_move() != self.my_side:
-                self.value_label.configure(text="等待我方回合…")
-                self.detail_label.configure(text=f"已忽略对方建议 · 原始坐标：{uci}")
-                return
-            move = parse_uci_move(uci)
-            chinese = (
-                format_chinese_move(self.challenge_board, move)
-                if move is not None and self.challenge_board is not None
-                else uci
-            )
-            self.value_label.configure(text=chinese)
-            body = event.get("body") or {}
-            self.detail_label.configure(
-                text=(
-                    f"原始坐标：{uci} · 服务器建议 · "
-                    f"{event.get('host', '')} · {body.get('message', '')}"
-                )
-            )
+            self._handle_server_suggestion(event, suggestion)
         elif event.get("kind") == "move":
             state = event.get("game_state") or {}
             fen = state.get("fen")
@@ -132,6 +115,51 @@ class SuggestionOverlay:
             else:
                 self.value_label.configure(text="等待引擎分析…")
                 self.detail_label.configure(text=f"局面状态：{state.get('status', 'unknown')}")
+
+    def _handle_server_suggestion(self, event: dict, suggestion: dict) -> None:
+        uci = suggestion.get("uci", "未知走法")
+        move = parse_uci_move(uci)
+        board = self.challenge_board
+        if move is None or board is None:
+            self.value_label.configure(text=uci)
+            self.detail_label.configure(text=f"服务器返回：{uci}")
+            return
+
+        side_before = self._side_to_move()
+        if side_before == self.my_side:
+            if self.engine_path:
+                self.value_label.configure(text="正在分析我方…")
+                self.detail_label.configure(text="已忽略服务器建议，正在调用 Pikafish")
+                self._schedule_engine(board.to_fen())
+            else:
+                self._show_server_suggestion(event, uci, move)
+            return
+
+        try:
+            board.apply(move)
+        except ValueError:
+            self.value_label.configure(text="等待我方回合…")
+            self.detail_label.configure(text=f"已忽略无法应用的对方走法：{uci}")
+            return
+
+        if self._side_to_move() == self.my_side and self.engine_path:
+            self.value_label.configure(text="正在分析我方…")
+            self.detail_label.configure(text="对方走子已应用，正在调用 Pikafish")
+            self._schedule_engine(board.to_fen())
+        else:
+            self.value_label.configure(text="等待对方走子…")
+            self.detail_label.configure(text=f"已忽略对方走法：{uci}")
+
+    def _show_server_suggestion(self, event: dict, uci: str, move: JJMove) -> None:
+        chinese = format_chinese_move(self.challenge_board, move)
+        self.value_label.configure(text=chinese)
+        body = event.get("body") or {}
+        self.detail_label.configure(
+            text=(
+                f"原始坐标：{uci} · 服务器建议 · "
+                f"{event.get('host', '')} · {body.get('message', '')}"
+            )
+        )
 
     def _side_to_move(self) -> str | None:
         if self.challenge_board is None:
