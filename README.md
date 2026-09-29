@@ -57,6 +57,14 @@ py -3.12 -m venv .venv
 .\.venv\Scripts\python.exe -m jj_assistant summarize data\jj-events.jsonl
 ```
 
+另开一个 PowerShell 窗口运行置顶建议面板：
+
+```powershell
+.\.venv\Scripts\python.exe -m jj_assistant overlay data\jj-events.jsonl
+```
+
+面板只显示建议，不会向 JJ 窗口发送点击或键盘输入。
+
 ## 设计边界
 
 探针默认只处理 `wxminigame.srv.jjmatch.cn`，并只保存帧类型、方向、顶层字段和已经识别的走棋字段，不保存完整未知负载。每个有效走棋事件带有更新后的完整 FEN 和同步状态。使用 `--set jj_capture_unknown=true` 后才会保存未知 JSON 负载。残局关卡还需要从开始消息或视觉识别取得初始局面，不能直接套用标准初始 FEN。

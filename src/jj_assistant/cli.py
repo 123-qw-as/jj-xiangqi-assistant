@@ -100,11 +100,18 @@ def main(argv: list[str] | None = None) -> int:
     subparsers.add_parser("self-check", help="运行离线协议与 FEN 自检")
     summary_parser = subparsers.add_parser("summarize", help="汇总探针 JSONL 日志")
     summary_parser.add_argument("path", type=Path)
+    overlay_parser = subparsers.add_parser("overlay", help="显示置顶建议窗口")
+    overlay_parser.add_argument("path", type=Path, nargs="?", default=Path("data/jj-events.jsonl"))
     args = parser.parse_args(argv)
     if args.command == "self-check":
         return self_check()
     if args.command == "summarize":
         return summarize(args.path)
+    if args.command == "overlay":
+        from .overlay import run_overlay
+
+        run_overlay(args.path)
+        return 0
     return 2
 
 
