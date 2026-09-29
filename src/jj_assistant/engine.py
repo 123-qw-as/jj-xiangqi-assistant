@@ -40,6 +40,8 @@ class PikafishEngine:
     def start(self) -> None:
         if self._process is not None and self._process.poll() is None:
             return
+        # 上一个进程可能在搜索中被终止，丢弃它留下的 UCI 输出。
+        self._lines = queue.Queue()
         creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
         try:
             self._process = subprocess.Popen(
@@ -57,7 +59,10 @@ class PikafishEngine:
             raise EngineError(f"无法启动 Pikafish：{exc}") from exc
 
         assert self._process.stdout is not None
-        self._reader = threading.Thread(target=self._read_output, daemon=True)
+        output_queue = self._lines
+        self._reader = threading.Thread(
+            target=self._read_output, args=(output_queue,), daemon=True
+        )
         self._reader.start()
         try:
             self._send("uci")
@@ -75,7 +80,14 @@ class PikafishEngine:
             self.start()
             self._send(f"position fen {fen}")
             self._send(f"go movetime {movetime_ms}")
-            line = self._wait_for("bestmove", max(self.startup_timeout, movetime_ms / 1000 + 5))
+            try:
+                line = self._wait_for(
+                    "bestmove", max(self.startup_timeout, movetime_ms / 1000 + 5)
+                )
+            except EngineError:
+                # 超时后不要复用可能仍在搜索的进程，下一次分析会重新握手。
+                self.close()
+                raise
             parts = line.split()
             if len(parts) < 2 or parts[1] == "(none)":
                 raise EngineError(f"Pikafish 没有返回可行走法：{line}")
@@ -94,6 +106,8 @@ class PikafishEngine:
         except (OSError, subprocess.TimeoutExpired):
             process.kill()
             process.wait(timeout=2)
+        finally:
+            self._lines = queue.Queue()
 
     def __enter__(self) -> PikafishEngine:
         self.start()
@@ -125,9 +139,9 @@ class PikafishEngine:
             if line.startswith(prefix):
                 return line
 
-    def _read_output(self) -> None:
+    def _read_output(self, output_queue: queue.Queue[str]) -> None:
         process = self._process
         if process is None or process.stdout is None:
             return
         for line in process.stdout:
-            self._lines.put(line.strip())
+            output_queue.put(line.strip())
