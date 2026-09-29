@@ -67,6 +67,13 @@ class XiangqiBoard:
             self.fullmove_number += 1
         return captured
 
+    def piece_at(self, x: int, y: int) -> str | None:
+        """按 JJ 坐标读取棋子；``y=0`` 是红方底线。"""
+
+        if not 0 <= x < 9 or not 0 <= y < 10:
+            raise ValueError(f"棋盘坐标超出范围：({x},{y})")
+        return self.rows[9 - y][x]
+
     def to_fen(self) -> str:
         encoded_rows: list[str] = []
         for row in self.rows:

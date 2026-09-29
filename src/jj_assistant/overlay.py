@@ -5,7 +5,10 @@ import tkinter as tk
 from ctypes import wintypes
 from pathlib import Path
 
+from .board import XiangqiBoard
 from .events import enrich_http_event
+from .notation import format_chinese_move
+from .protocol import parse_uci_move
 
 
 class SuggestionOverlay:
@@ -14,6 +17,7 @@ class SuggestionOverlay:
     def __init__(self, event_path: str | Path) -> None:
         self.event_path = Path(event_path)
         self.offset = 0
+        self.challenge_board: XiangqiBoard | None = None
         self.root = tk.Tk()
         self.root.title("JJ 建议")
         self.root.overrideredirect(True)
@@ -68,17 +72,49 @@ class SuggestionOverlay:
             return
         if event.get("kind") in {"http_request", "http_response"}:
             enrich_http_event(event)
+        if event.get("kind") == "http_request":
+            self.challenge_board = self._board_from_request(event)
         suggestion = event.get("suggestion")
         if suggestion:
-            self.value_label.configure(text=suggestion.get("uci", "未知走法"))
+            uci = suggestion.get("uci", "未知走法")
+            move = parse_uci_move(uci)
+            chinese = (
+                format_chinese_move(self.challenge_board, move)
+                if move is not None and self.challenge_board is not None
+                else uci
+            )
+            self.value_label.configure(text=chinese)
             body = event.get("body") or {}
             self.detail_label.configure(
-                text=f"服务器建议 · {event.get('host', '')} · {body.get('message', '')}"
+                text=(
+                    f"原始坐标：{uci} · 服务器建议 · "
+                    f"{event.get('host', '')} · {body.get('message', '')}"
+                )
             )
         elif event.get("kind") == "move":
             state = event.get("game_state") or {}
             self.value_label.configure(text="等待引擎分析…")
             self.detail_label.configure(text=f"局面状态：{state.get('status', 'unknown')}")
+
+    @staticmethod
+    def _board_from_request(event: dict) -> XiangqiBoard | None:
+        state = event.get("challenge_state")
+        if not isinstance(state, dict):
+            return None
+        fen = state.get("initial_fen")
+        history = state.get("history_uci")
+        if not isinstance(fen, str) or not isinstance(history, list):
+            return None
+        try:
+            board = XiangqiBoard.from_fen(fen)
+            for uci in history:
+                move = parse_uci_move(uci)
+                if move is None:
+                    return None
+                board.apply(move)
+            return board
+        except (TypeError, ValueError):
+            return None
 
     def _place_near_jj(self) -> None:
         try:
